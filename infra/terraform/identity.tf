@@ -61,6 +61,25 @@ resource "azurerm_federated_identity_credential" "gh_actions_pr" {
   subject             = "repo:${var.github_owner}/${var.github_repository_name}:pull_request"
 }
 
+# Additional Federated Credentials for GitHub Actions immutable account/repo IDs
+resource "azurerm_federated_identity_credential" "gh_actions_main_id" {
+  name                = "fic-gh-main-id"
+  resource_group_name = azurerm_resource_group.rg.name
+  parent_id           = azurerm_user_assigned_identity.github_actions.id
+  audience            = ["api://AzureADTokenExchange"]
+  issuer              = "https://token.actions.githubusercontent.com"
+  subject             = "repo:jagat1980@9037165/myaex@1460317773:ref:refs/heads/main"
+}
+
+resource "azurerm_federated_identity_credential" "gh_actions_pr_id" {
+  name                = "fic-gh-pr-id"
+  resource_group_name = azurerm_resource_group.rg.name
+  parent_id           = azurerm_user_assigned_identity.github_actions.id
+  audience            = ["api://AzureADTokenExchange"]
+  issuer              = "https://token.actions.githubusercontent.com"
+  subject             = "repo:jagat1980@9037165/myaex@1460317773:pull_request"
+}
+
 # Scoped RBAC Roles for GitHub Actions
 
 # Contributor on Resource Group to manage cloud infrastructure
