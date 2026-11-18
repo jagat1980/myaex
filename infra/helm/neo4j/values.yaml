@@ -55,6 +55,10 @@ config:
   db.logs.query.enabled: "INFO"
   db.logs.query.threshold: "0ms"
 
+# Workload Identity configuration for Azure Key Vault CSI access
+podSpec:
+  serviceAccountName: "context-graph-sa"
+
 # Mount Secrets Store CSI volume to enable automatic secret synchronization and rotation
 additionalVolumes:
   - name: "secrets-store-inline"
