@@ -1,0 +1,38 @@
+# Terraform local state and runtime files
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+tfplan
+*.tfplan
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+*.tfvars.json
+
+# TFLint cache
+.tflint.d/
+
+# Secrets and environment files
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+
+# Python and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

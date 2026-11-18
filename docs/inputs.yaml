@@ -1,0 +1,62 @@
+# Context Graph Inputs Configuration
+# Hard safety: Secret VALUES never go here – only secret NAMES.
+platform:
+  cloud: aks
+  region: uksouth
+  allowed_kube_context: aks-contextgraph-nonprod   # exact kubectl context name for NON-PROD cluster
+  namespace: context-graph
+  storage_class: managed-csi-premium               # AKS premium managed SSD
+  secret_store: azure-key-vault
+  secret_store_name: kv-cg-nonprod-hf3i3
+  container_registry: crcontextgraphnonprodhf3i3.azurecr.io
+  uami_client_id: 20e64f89-8453-4843-97bc-3b29cf72b79a
+neo4j:
+  chart_version: 2026.10.2                         # pinned official neo4j Community Edition
+  cpu: "2"
+  memory: 8Gi
+  disk: 50Gi
+  heap: 2g
+  pagecache: 4g
+  password_secret_name: neo4j-auth
+postgres:
+  host: psql-contextgraph-nonprod-hf3i3.postgres.database.azure.com
+  database: contextgraph
+  user_secret_name: postgres-auth
+tenant:
+  tenant_id: t1                                    # single POC tenant
+  name: POC-Tenant
+sources:
+  itsm:
+    type: servicenow                               # servicenow | sx
+    instance_url: https://poc-itsm.internal        # mock / sandbox endpoint
+    credential_secret_name: itsm-credentials
+    tables: [cmdb_ci_server, cmdb_ci_service, cmdb_rel_ci, change_request, incident]
+  solarwinds:
+    api_url: https://poc-solarwinds.internal/api
+    credential_secret_name: solarwinds-credentials
+    poll_minutes: 15
+  azure:
+    tenant_id: 0c0696f6-cda5-4908-bedf-af3381b78d93
+    subscription_ids: ["d78af5f4-5d2d-4141-a725-2088437da0ca"]
+    auth: workload-identity
+    poll_minutes: 15
+  bigfix:
+    rest_url: https://poc-bigfix.internal:52311/api # BigFix 11.0.6+
+    credential_secret_name: bigfix-credentials
+    poll_minutes: 60
+  backup:
+    type: veeam                                    # veeam | rubrik
+    api_url: https://poc-veeam.internal:9419/api
+    credential_secret_name: veeam-credentials
+    poll_minutes: 60
+policy:
+  freshness_minutes: {topology: 15, inventory: 60, backup: 1440}
+  min_confidence_for_auto: 0.9
+  rpo_hours: 24
+  max_blast_radius_hops: 3
+mcp:
+  service_name: context-graph-mcp
+  port: 3001
+  auth_token_secret_name: mcp-auth-token
+evaluation:
+  sample_ci_list_file: evals/sample_cis.csv   # 50 CIs with hand-verified owner/service

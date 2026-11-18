@@ -1,0 +1,72 @@
+# ==============================================================================
+# Context Graph – Schema Initializer Job
+# Stage 1: Applies 001_constraints.cypher (Neo4j) & 001_init.sql (Postgres)
+# Runs in-cluster with direct access to private DNS and private subnets
+# ==============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: schema-scripts
+  namespace: context-graph
+data:
+  001_constraints.cypher: |
+    CREATE CONSTRAINT ci_uid_unique IF NOT EXISTS FOR (c:CI) REQUIRE c.uid IS UNIQUE;
+    CREATE CONSTRAINT business_service_uid_unique IF NOT EXISTS FOR (s:BusinessService) REQUIRE s.uid IS UNIQUE;
+    CREATE CONSTRAINT assignment_group_uid_unique IF NOT EXISTS FOR (g:AssignmentGroup) REQUIRE g.uid IS UNIQUE;
+    CREATE CONSTRAINT change_uid_unique IF NOT EXISTS FOR (ch:Change) REQUIRE ch.uid IS UNIQUE;
+    CREATE CONSTRAINT incident_uid_unique IF NOT EXISTS FOR (i:Incident) REQUIRE i.uid IS UNIQUE;
+    CREATE CONSTRAINT backup_job_uid_unique IF NOT EXISTS FOR (b:BackupJob) REQUIRE b.uid IS UNIQUE;
+    CREATE INDEX ci_tenant_id_idx IF NOT EXISTS FOR (c:CI) ON (c.tenant_id);
+    CREATE INDEX ci_name_idx IF NOT EXISTS FOR (c:CI) ON (c.name);
+    CREATE INDEX ci_ip_idx IF NOT EXISTS FOR (c:CI) ON (c.ip);
+    CREATE INDEX ci_last_seen_idx IF NOT EXISTS FOR (c:CI) ON (c.last_seen);
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: apply-graph-schema
+  namespace: context-graph
+  labels:
+    app: graph-writer
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: graph-writer
+        azure.workload.identity/use: "true"
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: schema-loader
+          image: neo4j:2026.10.2-community
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for Neo4j Bolt port 7687 to become ready..."
+              until nc -z -v -w5 context-graph 7687; do
+                echo "Waiting for context-graph:7687..."
+                sleep 3
+              done
+              PASSWORD=$(cat /mnt/secrets-store/neo4j-auth)
+              echo "Applying Neo4j Cypher Constraints..."
+              cypher-shell -a bolt://context-graph:7687 -u neo4j -p "$PASSWORD" -f /scripts/001_constraints.cypher
+              echo "Neo4j Cypher constraints applied successfully!"
+          volumeMounts:
+            - name: schema-scripts
+              mountPath: /scripts
+            - name: secrets-store-inline
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: schema-scripts
+          configMap:
+            name: schema-scripts
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: "neo4j-spc"

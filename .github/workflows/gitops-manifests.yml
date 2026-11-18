@@ -1,0 +1,127 @@
+name: GitOps - Kubernetes Manifests & Neo4j Deployment
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'infra/helm/**'
+      - 'graph/schema/**'
+      - '.github/workflows/gitops-manifests.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # Required for Azure OIDC login
+  contents: read
+
+jobs:
+  deploy-manifests:
+    name: Deploy Helm & K8s Manifests to AKS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm v3
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.16.2'
+
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.30.2'
+
+      - name: Azure Login via OIDC (Keyless)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS Credentials
+        run: |
+          az aks get-credentials \
+            --resource-group rg-contextgraph-nonprod-uksouth \
+            --name aks-contextgraph-nonprod \
+            --overwrite-existing
+
+      - name: Enforce Hard Safety Rule 1 (Verify Kube Context)
+        run: |
+          CURRENT_CTX=$(kubectl config current-context)
+          ALLOWED_CTX="aks-contextgraph-nonprod"
+          echo "Current Context: $CURRENT_CTX"
+          if [ "$CURRENT_CTX" != "$ALLOWED_CTX" ]; then
+            echo "ERROR: Context mismatch! Hard Safety Rule 1 violation. Aborting."
+            exit 1
+          fi
+
+      - name: Ensure Target Namespace Exists
+        run: |
+          kubectl create namespace context-graph --dry-run=client -o yaml | kubectl apply -f -
+          kubectl label namespace context-graph azure.workload.identity/use=true --overwrite
+
+      - name: Apply SecretProviderClass & NetworkPolicies
+        run: |
+          kubectl apply -f infra/helm/neo4j/secret-provider-class.yaml
+          kubectl apply -f infra/helm/neo4j/network-policy.yaml
+
+      - name: Bootstrap SecretProviderClass CSI Volume Sync
+        run: |
+          cat << 'EOF' | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: csi-secret-sync
+            namespace: context-graph
+          spec:
+            ttlSecondsAfterFinished: 60
+            template:
+              metadata:
+                labels:
+                  azure.workload.identity/use: "true"
+              spec:
+                serviceAccountName: default
+                restartPolicy: OnFailure
+                containers:
+                  - name: sync
+                    image: mcr.microsoft.com/cbl-mariner/base/core:2.0
+                    command: ["/bin/sh", "-c", "echo 'CSI secret synchronized'"]
+                    volumeMounts:
+                      - name: secrets-store-inline
+                        mountPath: "/mnt/secrets-store"
+                        readOnly: true
+                volumes:
+                  - name: secrets-store-inline
+                    csi:
+                      driver: secrets-store.csi.k8s.io
+                      readOnly: true
+                      volumeAttributes:
+                        secretProviderClass: "neo4j-spc"
+          EOF
+          kubectl wait --for=condition=complete job/csi-secret-sync -n context-graph --timeout=60s || true
+
+      - name: Add Neo4j Helm Repository
+        run: |
+          helm repo add neo4j https://helm.neo4j.com/neo4j
+          helm repo update neo4j
+
+      - name: Deploy Neo4j Community Edition (Atomic)
+        run: |
+          helm upgrade --install context-graph neo4j/neo4j \
+            --namespace context-graph \
+            --version 2026.10.2 \
+            -f infra/helm/neo4j/values.yaml \
+            --atomic \
+            --timeout 300s
+
+      - name: Verify Neo4j Rollout Status
+        run: |
+          kubectl rollout status statefulset/context-graph -n context-graph --timeout=180s
+          kubectl get pods -n context-graph -o wide
+
+      - name: Apply Neo4j Cypher Schema Constraints
+        run: |
+          kubectl delete job apply-graph-schema -n context-graph --ignore-not-found=true
+          kubectl apply -f infra/helm/neo4j/schema-init-job.yaml
+          kubectl wait --for=condition=complete job/apply-graph-schema -n context-graph --timeout=120s
+          echo "Stage 1: Neo4j schema constraints successfully applied."

@@ -1,0 +1,101 @@
+# ==============================================================================
+# Context Graph – Namespace Network Policies
+# Hard safety: Default-deny on all ingress & egress. Only least-privilege flows.
+# ==============================================================================
+
+# 1. Default-deny all traffic in namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: context-graph
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# 2. Allow egress to CoreDNS in kube-system
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-coredns-egress
+  namespace: context-graph
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# 3. Allow Neo4j Bolt port 7687 ingress strictly from graph-writer and context-graph-mcp
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-neo4j-bolt-ingress
+  namespace: context-graph
+spec:
+  podSelector:
+    matchLabels:
+      app: context-graph
+  policyTypes:
+    - Ingress
+  egress:
+    # Allow Neo4j internal cluster communication if needed
+    - to:
+        - podSelector:
+            matchLabels:
+              app: context-graph
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - graph-writer
+                  - context-graph-mcp
+      ports:
+        - protocol: TCP
+          port: 7687
+---
+# 4. Allow egress to PostgreSQL Flexible Server subnet (10.240.16.0/24) on port 5432
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-egress
+  namespace: context-graph
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - graph-writer
+          - context-graph-mcp
+          - entity-resolver
+          - solarwinds-connector
+          - itsm-connector
+          - azure-connector
+          - bigfix-connector
+          - backup-connector
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.240.16.0/24
+      ports:
+        - protocol: TCP
+          port: 5432

@@ -1,0 +1,69 @@
+# ==============================================================================
+# Neo4j Community Edition – Helm Values
+# Pinned Chart Version: 2026.10.2
+# Storage: AKS Premium Managed SSD (managed-csi-premium)
+# Security: ClusterIP, SecretProviderClass CSI integration, query logging
+# ==============================================================================
+
+# Disable lookups to ensure clean offline/GitOps templating
+disableLookups: true
+
+neo4j:
+  name: "context-graph"
+  edition: "community"
+  passwordFromSecret: "neo4j-auth"
+  resources:
+    cpu: "2"
+    memory: "8Gi"
+  labels:
+    app: "context-graph"
+    component: "graph-store"
+
+volumes:
+  data:
+    mode: "dynamic"
+    dynamic:
+      storageClassName: "managed-csi-premium"
+      accessModes:
+        - "ReadWriteOnce"
+      requests:
+        storage: "50Gi"
+
+# Strict ClusterIP - zero public LoadBalancers or Ingress
+services:
+  neo4j:
+    spec:
+      type: "ClusterIP"
+    ports:
+      http:
+        enabled: true
+      bolt:
+        enabled: true
+      https:
+        enabled: false
+  admin:
+    spec:
+      type: "ClusterIP"
+
+# Memory and logging configuration
+# Sizing invariant: heap (2g) + pagecache (4g) + overhead (1g) = 7g < 8Gi container memory
+config:
+  server.memory.heap.initial_size: "2g"
+  server.memory.heap.max_size: "2g"
+  server.memory.pagecache.size: "4g"
+  db.logs.query.enabled: "INFO"
+  db.logs.query.threshold: "0ms"
+
+# Mount Secrets Store CSI volume to enable automatic secret synchronization and rotation
+additionalVolumes:
+  - name: "secrets-store-inline"
+    csi:
+      driver: "secrets-store.csi.k8s.io"
+      readOnly: true
+      volumeAttributes:
+        secretProviderClass: "neo4j-spc"
+
+additionalVolumeMounts:
+  - name: "secrets-store-inline"
+    mountPath: "/mnt/secrets-store"
+    readOnly: true
