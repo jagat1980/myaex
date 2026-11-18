@@ -51,12 +51,6 @@ spec:
       app: context-graph
   policyTypes:
     - Ingress
-  egress:
-    # Allow Neo4j internal cluster communication if needed
-    - to:
-        - podSelector:
-            matchLabels:
-              app: context-graph
   ingress:
     - from:
         - podSelector:
@@ -70,7 +64,32 @@ spec:
         - protocol: TCP
           port: 7687
 ---
-# 4. Allow egress to PostgreSQL Flexible Server subnet (10.240.16.0/24) on port 5432
+# 4. Allow Bolt port 7687 egress from graph-writer and context-graph-mcp to Neo4j
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-neo4j-bolt-egress
+  namespace: context-graph
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - graph-writer
+          - context-graph-mcp
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: context-graph
+      ports:
+        - protocol: TCP
+          port: 7687
+---
+# 5. Allow egress to PostgreSQL Flexible Server subnet (10.240.16.0/24) on port 5432
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

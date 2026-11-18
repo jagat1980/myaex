@@ -1,0 +1,164 @@
+# ==============================================================================
+# Context Graph – PostgreSQL Schema Initializer Job
+# Stage 1: Applies 001_init.sql to Azure PostgreSQL Flexible Server
+# ==============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-script
+  namespace: context-graph
+data:
+  001_init.sql: |
+    CREATE EXTENSION IF NOT EXISTS vector;
+
+    CREATE TABLE IF NOT EXISTS raw_records (
+        id BIGSERIAL PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL,
+        source_system VARCHAR(64) NOT NULL,
+        source_id VARCHAR(256) NOT NULL,
+        kind VARCHAR(64) NOT NULL,
+        payload JSONB NOT NULL,
+        content_hash CHAR(64) NOT NULL,
+        observed_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT uq_raw_source UNIQUE (tenant_id, source_system, source_id, content_hash)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_raw_records_lookup
+    ON raw_records (tenant_id, source_system, source_id);
+
+    CREATE INDEX IF NOT EXISTS idx_raw_records_observed
+    ON raw_records (observed_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ingest_runs (
+        id BIGSERIAL PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL,
+        source_system VARCHAR(64) NOT NULL,
+        watermark VARCHAR(256),
+        records_read INT DEFAULT 0,
+        records_new INT DEFAULT 0,
+        records_changed INT DEFAULT 0,
+        errors INT DEFAULT 0,
+        started_at TIMESTAMPTZ NOT NULL,
+        finished_at TIMESTAMPTZ,
+        status VARCHAR(32) NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ingest_runs_source
+    ON ingest_runs (tenant_id, source_system, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ci_alias (
+        tenant_id VARCHAR(64) NOT NULL,
+        source_system VARCHAR(64) NOT NULL,
+        source_id VARCHAR(256) NOT NULL,
+        ci_id UUID NOT NULL,
+        confidence NUMERIC(3, 2) NOT NULL,
+        last_verified TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (tenant_id, source_system, source_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ci_alias_ci_id
+    ON ci_alias (tenant_id, ci_id);
+
+    CREATE TABLE IF NOT EXISTS er_conflicts (
+        id BIGSERIAL PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL,
+        ci_id_candidate UUID,
+        source_system VARCHAR(64) NOT NULL,
+        source_id VARCHAR(256) NOT NULL,
+        conflict_reason TEXT NOT NULL,
+        raw_payload JSONB NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_er_conflicts_tenant
+    ON er_conflicts (tenant_id, source_system);
+
+    CREATE TABLE IF NOT EXISTS embeddings (
+        id BIGSERIAL PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL,
+        ci_id UUID,
+        service_name VARCHAR(128),
+        doc_type VARCHAR(64) NOT NULL,
+        content TEXT NOT NULL,
+        embedding vector(768) NOT NULL,
+        metadata JSONB,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_embeddings_tenant_doc
+    ON embeddings (tenant_id, doc_type);
+
+    CREATE INDEX IF NOT EXISTS idx_embeddings_hnsw
+    ON embeddings USING hnsw (embedding vector_cosine_ops);
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id BIGSERIAL PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL,
+        actor VARCHAR(128) NOT NULL,
+        action VARCHAR(64) NOT NULL,
+        entity_type VARCHAR(64) NOT NULL,
+        entity_id VARCHAR(256) NOT NULL,
+        details JSONB,
+        timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_time
+    ON audit_log (tenant_id, timestamp DESC);
+
+    REVOKE UPDATE, DELETE ON audit_log FROM PUBLIC;
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: apply-postgres-schema
+  namespace: context-graph
+  labels:
+    app: graph-writer
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: graph-writer
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: context-graph-sa
+      restartPolicy: OnFailure
+      containers:
+        - name: psql-loader
+          image: postgres:16-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Parsing PostgreSQL credentials from Key Vault secret..."
+              AUTH_JSON=$(cat /mnt/secrets-store/postgres-auth)
+              # Extract JSON fields using python or sed
+              export PGHOST=$(echo "$AUTH_JSON" | sed -n 's/.*"host": *"\{0,1\}\([^",}]*\).*/\1/p')
+              export PGUSER=$(echo "$AUTH_JSON" | sed -n 's/.*"username": *"\{0,1\}\([^",}]*\).*/\1/p')
+              export PGPASSWORD=$(echo "$AUTH_JSON" | sed -n 's/.*"password": *"\{0,1\}\([^",}]*\).*/\1/p')
+              export PGDATABASE=$(echo "$AUTH_JSON" | sed -n 's/.*"database": *"\{0,1\}\([^",}]*\).*/\1/p')
+              export PGPORT=5432
+              export PGSSLMODE=require
+
+              echo "Connecting to PostgreSQL Flexible Server at $PGHOST:$PGPORT/$PGDATABASE as $PGUSER..."
+              psql -f /scripts/001_init.sql
+              echo "PostgreSQL schema successfully initialized with pgvector tables!"
+          volumeMounts:
+            - name: sql-scripts
+              mountPath: /scripts
+            - name: secrets-store-inline
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: sql-scripts
+          configMap:
+            name: postgres-init-script
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: "neo4j-spc"

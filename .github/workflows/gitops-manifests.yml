@@ -125,3 +125,10 @@ jobs:
           kubectl apply -f infra/helm/neo4j/schema-init-job.yaml
           kubectl wait --for=condition=complete job/apply-graph-schema -n context-graph --timeout=120s
           echo "Stage 1: Neo4j schema constraints successfully applied."
+
+      - name: Apply PostgreSQL pgvector Schema Tables
+        run: |
+          kubectl delete job apply-postgres-schema -n context-graph --ignore-not-found=true
+          kubectl apply -f infra/helm/neo4j/postgres-init-job.yaml
+          kubectl wait --for=condition=complete job/apply-postgres-schema -n context-graph --timeout=120s
+          echo "Stage 1: PostgreSQL tables & pgvector successfully initialized."
