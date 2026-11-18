@@ -1,7 +1,7 @@
 # ==============================================================================
 # Neo4j Community Edition – Helm Values
 # Pinned Chart Version: 2026.10.2
-# Trigger: GitOps deployment rollout
+# Trigger: GitOps deployment rollout revision 2
 # Storage: AKS Premium Managed SSD (managed-csi-premium)
 # Security: ClusterIP, SecretProviderClass CSI integration, query logging
 # ==============================================================================

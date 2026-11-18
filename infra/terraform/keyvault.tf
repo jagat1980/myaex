@@ -35,9 +35,8 @@ resource "azurerm_role_assignment" "deployer_kv_secrets_officer" {
 
 # Auto-generated credentials for internal data stores
 resource "random_password" "neo4j_password" {
-  length           = 24
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
+  length  = 24
+  special = false
 }
 
 resource "random_password" "postgres_password" {
@@ -48,7 +47,7 @@ resource "random_password" "postgres_password" {
 # tfsec:ignore:azure-keyvault-ensure-secret-expiry Standing cluster infrastructure credential
 resource "azurerm_key_vault_secret" "neo4j_auth" {
   name         = "neo4j-auth"
-  value        = random_password.neo4j_password.result
+  value        = "neo4j/${random_password.neo4j_password.result}"
   content_type = "text/plain"
   key_vault_id = azurerm_key_vault.kv.id
   depends_on   = [azurerm_role_assignment.deployer_kv_secrets_officer]
