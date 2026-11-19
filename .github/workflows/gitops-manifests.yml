@@ -142,5 +142,11 @@ jobs:
         run: |
           if [ -d infra/helm/connectors ]; then
             kubectl apply -f infra/helm/connectors/
-            kubectl get cronjobs -n context-graph
           fi
+
+      - name: Deploy Graph Writer CronJob
+        run: |
+          if [ -d infra/helm/writer ]; then
+            kubectl apply -f infra/helm/writer/
+          fi
+          kubectl get cronjobs -n context-graph

@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: graph-writer
+  namespace: context-graph
+  labels:
+    app: graph-writer
+spec:
+  schedule: "7,22,37,52 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: graph-writer
+            azure.workload.identity/use: "true"
+        spec:
+          serviceAccountName: context-graph-sa
+          restartPolicy: OnFailure
+          containers:
+            - name: graph-writer
+              image: crcontextgraphnonprodhf3i3.azurecr.io/graph-writer:latest
+              imagePullPolicy: Always
+              env:
+                - name: TENANT_ID
+                  value: "t1"
+                - name: NEO4J_URI
+                  value: "bolt://context-graph.context-graph.svc.cluster.local:7687"
+                - name: NEO4J_AUTH_FILE
+                  value: "/mnt/secrets-store/neo4j-auth"
+                - name: POSTGRES_AUTH_FILE
+                  value: "/mnt/secrets-store/postgres-auth"
+                - name: STALENESS_MINUTES
+                  value: "60"
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                runAsNonRoot: true
+                runAsUser: 10001
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: secrets-store-inline
+                  mountPath: "/mnt/secrets-store"
+                  readOnly: true
+          volumes:
+            - name: secrets-store-inline
+              csi:
+                driver: secrets-store.csi.k8s.io
+                readOnly: true
+                volumeAttributes:
+                  secretProviderClass: neo4j-spc

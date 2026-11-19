@@ -10,6 +10,7 @@ on:
       - 'writer/**'
       - 'risk/**'
       - 'Dockerfile*'
+      - 'writer/Dockerfile'
       - 'pyproject.toml'
       - '.github/workflows/ci-containers.yml'
   pull_request:
@@ -21,6 +22,7 @@ on:
       - 'writer/**'
       - 'risk/**'
       - 'Dockerfile*'
+      - 'writer/Dockerfile'
       - 'pyproject.toml'
       - '.github/workflows/ci-containers.yml'
 
@@ -49,17 +51,17 @@ jobs:
 
       - name: Lint with Ruff
         run: |
-          ruff check connectors/ || true
+          ruff check connectors/ resolver/ writer/ || true
 
       - name: Type check with Mypy
         run: |
-          mypy --ignore-missing-imports connectors/ || true
+          mypy --ignore-missing-imports connectors/ resolver/ writer/ || true
 
       - name: Run Unit Tests
         env:
           PYTHONPATH: .
         run: |
-          pytest connectors/ -v
+          pytest connectors/ resolver/ writer/ -v
 
   build-and-sign:
     name: Build, Scan & Cosign (${{ matrix.name }})
@@ -77,6 +79,9 @@ jobs:
           - name: connector-solarwinds
             dockerfile: connectors/Dockerfile.solarwinds
             image: crcontextgraphnonprodhf3i3.azurecr.io/connector-solarwinds
+          - name: graph-writer
+            dockerfile: writer/Dockerfile
+            image: crcontextgraphnonprodhf3i3.azurecr.io/graph-writer
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
