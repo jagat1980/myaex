@@ -7,6 +7,10 @@ on:
       - 'infra/helm/**'
       - 'graph/schema/**'
       - '.github/workflows/gitops-manifests.yml'
+  workflow_run:
+    workflows: [ "CI - Application Containers & Security Gates" ]
+    types: [ completed ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -17,6 +21,7 @@ jobs:
   deploy-manifests:
     name: Deploy Helm & K8s Manifests to AKS
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -132,3 +137,10 @@ jobs:
           kubectl apply -f infra/helm/neo4j/postgres-init-job.yaml
           kubectl wait --for=condition=complete job/apply-postgres-schema -n context-graph --timeout=120s
           echo "Stage 1: PostgreSQL tables & pgvector successfully initialized."
+
+      - name: Deploy Connector CronJobs (Azure & SolarWinds)
+        run: |
+          if [ -d infra/helm/connectors ]; then
+            kubectl apply -f infra/helm/connectors/
+            kubectl get cronjobs -n context-graph
+          fi

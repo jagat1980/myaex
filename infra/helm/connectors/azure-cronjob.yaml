@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: connector-azure
+  namespace: context-graph
+  labels:
+    app: azure-connector
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: azure-connector
+            azure.workload.identity/use: "true"
+        spec:
+          serviceAccountName: context-graph-sa
+          restartPolicy: OnFailure
+          containers:
+            - name: azure-connector
+              image: crcontextgraphnonprodhf3i3.azurecr.io/connector-azure:latest
+              imagePullPolicy: Always
+              env:
+                - name: TENANT_ID
+                  value: "t1"
+                - name: AZURE_SUBSCRIPTION_ID
+                  value: "d78af5f4-5d2d-4141-a725-2088437da0ca"
+                - name: POSTGRES_AUTH_FILE
+                  value: "/mnt/secrets-store/postgres-auth"
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                runAsNonRoot: true
+                runAsUser: 10001
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: secrets-store-inline
+                  mountPath: "/mnt/secrets-store"
+                  readOnly: true
+          volumes:
+            - name: secrets-store-inline
+              csi:
+                driver: secrets-store.csi.k8s.io
+                readOnly: true
+                volumeAttributes:
+                  secretProviderClass: neo4j-spc

@@ -1,0 +1,1 @@
+"""Azure source connector package."""

@@ -118,3 +118,24 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+---
+# 6. Allow HTTPS port 443 egress from connectors to cloud APIs
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-connectors-https-egress
+  namespace: context-graph
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - azure-connector
+          - solarwinds-connector
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443

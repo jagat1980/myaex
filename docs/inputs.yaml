@@ -32,7 +32,7 @@ sources:
     credential_secret_name: itsm-credentials
     tables: [cmdb_ci_server, cmdb_ci_service, cmdb_rel_ci, change_request, incident]
   solarwinds:
-    api_url: https://poc-solarwinds.internal/api
+    api_url: https://api.eu-01.cloud.solarwinds.com # SolarWinds Observability SaaS (EU-01)
     credential_secret_name: solarwinds-credentials
     poll_minutes: 15
   azure:

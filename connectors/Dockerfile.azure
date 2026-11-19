@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+FROM python:3.12-slim-bookworm AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    "pydantic>=2.7.0" \
+    "asyncpg>=0.29.0" \
+    "azure-identity>=1.15.0" \
+    "azure-mgmt-resourcegraph>=8.0.0"
+
+# Create unprivileged non-root user
+RUN groupadd -g 10001 appgroup && \
+    useradd -u 10001 -g appgroup -s /sbin/nologin -d /app appuser
+
+# Copy shared common library and azure connector
+COPY connectors/common /app/connectors/common
+COPY connectors/azure /app/connectors/azure
+
+USER 10001:10001
+
+ENTRYPOINT ["python", "-m", "connectors.azure.main"]
