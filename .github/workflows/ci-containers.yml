@@ -10,6 +10,7 @@ on:
       - 'writer/**'
       - 'risk/**'
       - 'Dockerfile*'
+      - 'pyproject.toml'
       - '.github/workflows/ci-containers.yml'
   pull_request:
     branches: [ main ]
@@ -20,6 +21,7 @@ on:
       - 'writer/**'
       - 'risk/**'
       - 'Dockerfile*'
+      - 'pyproject.toml'
       - '.github/workflows/ci-containers.yml'
 
 permissions:
@@ -42,10 +44,8 @@ jobs:
 
       - name: Install uv and dependencies
         run: |
-          pip install --upgrade pip uv ruff mypy pytest pytest-asyncio asyncpg httpx pydantic azure-identity azure-mgmt-resourcegraph
-          if [ -f pyproject.toml ]; then
-            uv pip install --system -e .
-          fi
+          pip install --upgrade pip uv ruff mypy pytest pytest-asyncio
+          uv pip install --system "pydantic>=2.7.0" "httpx>=0.27.0" "asyncpg>=0.29.0" "azure-identity>=1.16.0" "azure-mgmt-resourcegraph>=8.0.0" "neo4j>=5.19.0"
 
       - name: Lint with Ruff
         run: |
