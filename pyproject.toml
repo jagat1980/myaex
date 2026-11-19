@@ -38,5 +38,6 @@ strict = true
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 asyncio_mode = "auto"
 testpaths = ["connectors", "evals"]

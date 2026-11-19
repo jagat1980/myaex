@@ -56,6 +56,8 @@ jobs:
           mypy --ignore-missing-imports connectors/ || true
 
       - name: Run Unit Tests
+        env:
+          PYTHONPATH: .
         run: |
           pytest connectors/ -v
 
