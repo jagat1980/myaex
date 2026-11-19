@@ -100,8 +100,8 @@ async def run_azure_sync() -> IngestRunResult:
 
         finally:
             await finish_ingest_run(conn, run_id, result)
-            await pool.close()
 
+    await pool.close()
     return result
 
 
