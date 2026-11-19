@@ -62,7 +62,7 @@ jobs:
           pytest connectors/ -v
 
   build-and-sign:
-    name: Build, Scan & Cosign Images
+    name: Build, Scan & Cosign (${{ matrix.name }})
     needs: test-and-lint
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -109,7 +109,7 @@ jobs:
             ${{ matrix.image }}:latest
 
       - name: Scan Image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ matrix.image }}:${{ github.sha }}
           format: 'table'
