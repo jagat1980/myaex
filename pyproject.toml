@@ -15,6 +15,11 @@ dependencies = [
     "azure-identity>=1.16.0",
     "azure-mgmt-resourcegraph>=8.0.0",
     "neo4j>=5.19.0",
+    "fastmcp>=0.1.0",
+    "mcp>=1.0.0",
+    "uvicorn>=0.30.0",
+    "starlette>=0.38.0",
+    "opentelemetry-api>=1.28.0",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +31,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["connectors", "resolver", "writer", "risk"]
+packages = ["connectors", "resolver", "writer", "risk", "mcp/context_graph"]
 
 [tool.ruff]
 line-length = 100
@@ -38,6 +43,6 @@ strict = true
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "mcp"]
 asyncio_mode = "auto"
-testpaths = ["connectors", "resolver", "writer", "risk", "evals"]
+testpaths = ["connectors", "resolver", "writer", "risk", "mcp/context_graph/tests", "evals"]

@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: context-graph-mcp
+  namespace: context-graph
+  labels:
+    app: context-graph-mcp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: context-graph-mcp
+  template:
+    metadata:
+      labels:
+        app: context-graph-mcp
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: context-graph-sa
+      restartPolicy: Always
+      containers:
+        - name: mcp-server
+          image: crcontextgraphnonprodhf3i3.azurecr.io/context-graph-mcp:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3001
+              name: http-mcp
+          env:
+            - name: PORT
+              value: "3001"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: NEO4J_URI
+              value: "bolt://context-graph.context-graph.svc.cluster.local:7687"
+            - name: NEO4J_AUTH_FILE
+              value: "/mnt/secrets-store/neo4j-auth"
+            - name: POSTGRES_AUTH_FILE
+              value: "/mnt/secrets-store/postgres-auth"
+            - name: MCP_AUTH_TOKEN_FILE
+              value: "/mnt/secrets-store/mcp-auth-token"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: neo4j-spc

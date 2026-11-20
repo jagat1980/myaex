@@ -159,3 +159,11 @@ jobs:
             kubectl wait --for=condition=complete job/risk-loader -n context-graph --timeout=120s || true
             kubectl logs job/risk-loader -n context-graph || true
           fi
+
+      - name: Deploy Context Graph FastMCP Server
+        run: |
+          if [ -d infra/helm/mcp ]; then
+            kubectl apply -f infra/helm/mcp/
+            kubectl rollout status deployment/context-graph-mcp -n context-graph --timeout=180s
+          fi
+          kubectl get pods,services -n context-graph
