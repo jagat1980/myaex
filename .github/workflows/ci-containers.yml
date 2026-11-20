@@ -51,17 +51,17 @@ jobs:
 
       - name: Lint with Ruff
         run: |
-          ruff check connectors/ resolver/ writer/ || true
+          ruff check connectors/ resolver/ writer/ risk/ || true
 
       - name: Type check with Mypy
         run: |
-          mypy --ignore-missing-imports connectors/ resolver/ writer/ || true
+          mypy --ignore-missing-imports connectors/ resolver/ writer/ risk/ || true
 
       - name: Run Unit Tests
         env:
           PYTHONPATH: .
         run: |
-          pytest connectors/ resolver/ writer/ -v
+          pytest connectors/ resolver/ writer/ risk/ -v
 
   build-and-sign:
     name: Build, Scan & Cosign (${{ matrix.name }})

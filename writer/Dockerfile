@@ -26,6 +26,7 @@ RUN groupadd -g 10001 appgroup && \
 COPY connectors /app/connectors
 COPY resolver /app/resolver
 COPY writer /app/writer
+COPY risk /app/risk
 
 USER 10001:10001
 

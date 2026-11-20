@@ -60,6 +60,7 @@ spec:
                 values:
                   - graph-writer
                   - context-graph-mcp
+                  - risk-loader
       ports:
         - protocol: TCP
           port: 7687
@@ -78,6 +79,7 @@ spec:
         values:
           - graph-writer
           - context-graph-mcp
+          - risk-loader
   policyTypes:
     - Egress
   egress:
@@ -103,6 +105,7 @@ spec:
         values:
           - graph-writer
           - context-graph-mcp
+          - risk-loader
           - entity-resolver
           - solarwinds-connector
           - itsm-connector

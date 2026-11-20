@@ -150,3 +150,12 @@ jobs:
             kubectl apply -f infra/helm/writer/
           fi
           kubectl get cronjobs -n context-graph
+
+      - name: Deploy Vector Store & Risk Loader Job
+        run: |
+          if [ -d infra/helm/risk ]; then
+            kubectl delete job risk-loader -n context-graph --ignore-not-found=true
+            kubectl apply -f infra/helm/risk/
+            kubectl wait --for=condition=complete job/risk-loader -n context-graph --timeout=120s || true
+            kubectl logs job/risk-loader -n context-graph || true
+          fi
