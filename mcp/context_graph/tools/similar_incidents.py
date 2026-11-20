@@ -14,7 +14,7 @@ from risk.vectors import format_pgvector, generate_embedding
 logger = logging.getLogger(__name__)
 
 SQL_SIMILAR_DOCUMENTS = """
-SELECT id, doc_id, doc_type, title, content, metadata,
+SELECT id, ci_id, service_name, doc_type, content, metadata,
        1.0 - (embedding <=> $1::vector) AS similarity,
        created_at
 FROM embeddings
@@ -46,12 +46,14 @@ async def execute_similar_incidents(
     for r in rows:
         created_str = r["created_at"].isoformat() if r["created_at"] else datetime.now(timezone.utc).isoformat()
         metadata = json.loads(r["metadata"]) if isinstance(r["metadata"], str) else (r["metadata"] or {})
+        doc_id = metadata.get("doc_id", f"DOC-{r['id']}")
+        title = metadata.get("title", f"{r['doc_type'].capitalize()} {doc_id}")
         source_sys = metadata.get("source_system", "itsm" if r["doc_type"] == "incident" else "runbook")
 
         results.append({
-            "doc_id": r["doc_id"],
+            "doc_id": doc_id,
             "doc_type": r["doc_type"],
-            "title": r["title"],
+            "title": title,
             "similarity": round(float(r["similarity"]), 4),
             "content_excerpt": r["content"][:280] + ("..." if len(r["content"]) > 280 else ""),
             "metadata": metadata,
